@@ -62,7 +62,7 @@ async function init() {
         loadState();
         await loadDynamicAds();
         setupSync();
-        
+
         renderPresenterGrid();
         renderTelao();
         updateUI();
@@ -160,13 +160,13 @@ function drawNumber(num, isManual = false) {
         state.drawnNumbers.push(num);
         state.lastNumber = num;
         state.history.push(num);
-        sounds.draw.play().catch(() => {});
-        
+        sounds.draw.play().catch(() => { });
+
         if (state.drawnNumbers.length === 75) {
             setTimeout(() => showAlert("🏆 CARTELA COMPLETA!"), 500);
         }
     }
-    
+
     state.winType = null;
     broadcast();
     updateUI();
@@ -178,15 +178,15 @@ function resetGame() {
         state.lastNumber = null;
         state.winType = null;
         state.history = [];
-        sounds.reset.play().catch(() => {});
+        sounds.reset.play().catch(() => { });
         broadcast();
         updateUI();
     });
 }
 
 // EMERGENCY RESET
-window.fullSystemReset = function() {
-    if(confirm("Isso apagará todas as propagandas e limpará o jogo. Deseja continuar?")) {
+window.fullSystemReset = function () {
+    if (confirm("Isso apagará todas as propagandas e limpará o jogo. Deseja continuar?")) {
         localStorage.clear();
         const request = indexedDB.deleteDatabase(DB_NAME);
         request.onsuccess = () => location.reload();
@@ -202,7 +202,7 @@ function setMode(mode) {
 
 function triggerWin(type) {
     state.winType = type;
-    sounds.win.play().catch(() => {});
+    sounds.win.play().catch(() => { });
     broadcast();
     updateUI();
 }
@@ -236,17 +236,17 @@ function showAlert(msg) {
 
 function showConfirm(msg, onConfirm) {
     const overlay = document.getElementById('modal-overlay');
-    if (!overlay) { if(confirm(msg)) onConfirm(); return; }
+    if (!overlay) { if (confirm(msg)) onConfirm(); return; }
     document.getElementById('modal-message').textContent = msg;
     const btnContainer = document.getElementById('modal-buttons');
     btnContainer.innerHTML = '';
-    
+
     const bC = document.createElement('button'); bC.className = 'btn btn-danger'; bC.textContent = 'Não';
     bC.onclick = () => overlay.style.display = 'none';
-    
+
     const bS = document.createElement('button'); bS.className = 'btn btn-success'; bS.textContent = 'Sim';
     bS.onclick = () => { overlay.style.display = 'none'; onConfirm(); };
-    
+
     btnContainer.appendChild(bC);
     btnContainer.appendChild(bS);
     overlay.style.display = 'flex';
@@ -445,7 +445,7 @@ function undoLast() {
     updateUI();
 }
 
-window.registerManual = function() {
+window.registerManual = function () {
     const input = document.getElementById('manual-num');
     if (input) {
         drawNumber(input.value, true);
@@ -458,7 +458,7 @@ setInterval(() => {
     const isPresenter = !!document.getElementById('bingo-grid-presenter');
     if (isPresenter && state.mode === 'ads' && state.autoplayAds && state.dynamicAds.length > 0) {
         const currentAd = state.dynamicAds[state.currentAdIndex];
-        if (currentAd && currentAd.type === 'video') return; 
+        if (currentAd && currentAd.type === 'video') return;
         state.currentAdIndex = (state.currentAdIndex + 1) % state.dynamicAds.length;
         broadcast();
         updateUI();
