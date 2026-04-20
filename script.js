@@ -1,7 +1,6 @@
 /**
  * BINGO SYSTEM - CORE LOGIC
- * Handles synchronization between Presenter and Screen
- * Includes IndexedDB for dynamic Ad Management (Images & Videos)
+ * Optimized for High Performance & Large Media
  */
 
 const CHANNEL_NAME = 'bingo_channel';
@@ -25,7 +24,10 @@ function initDB() {
             db = e.target.result;
             resolve();
         };
-        request.onerror = (e) => reject(e);
+        request.onerror = (e) => {
+            console.error("Erro IndexedDB:", e);
+            reject(e);
+        };
     });
 }
 
@@ -41,10 +43,10 @@ let state = {
     cardColorName: '',
     winType: null,
     history: [],
-    dynamicAds: []
+    dynamicAds: [] // Metadata only during broadcast
 };
 
-let lastRenderedAdIndex = -1; // Evita recarregar a mesma mídia repetidamente
+let lastRenderedAdIndex = -1;
 
 // Sound Effects
 const sounds = {
@@ -55,18 +57,23 @@ const sounds = {
 
 // Initialize
 async function init() {
-    await initDB();
-    loadState();
-    await loadDynamicAds();
-    setupSync();
-    
-    renderPresenterGrid();
-    renderTelao();
-    updateUI();
+    try {
+        await initDB();
+        loadState();
+        await loadDynamicAds();
+        setupSync();
+        
+        renderPresenterGrid();
+        renderTelao();
+        updateUI();
+    } catch (err) {
+        console.error("Falha na inicialização:", err);
+    }
 }
 
 async function loadDynamicAds() {
     return new Promise((resolve) => {
+        if (!db) return resolve();
         const transaction = db.transaction(STORE_NAME, 'readonly');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.getAll();
@@ -74,6 +81,7 @@ async function loadDynamicAds() {
             state.dynamicAds = request.result;
             resolve();
         };
+        request.onerror = () => resolve();
     });
 }
 
@@ -82,11 +90,13 @@ function loadState() {
     const saved = localStorage.getItem('bingo_state');
     if (saved) {
         const parsed = JSON.parse(saved);
-        state = { ...state, ...parsed, dynamicAds: state.dynamicAds };
+        // Merge e garante que dynamicAds venha do DB
+        state = { ...state, ...parsed };
     }
 }
 
 function saveState() {
+    // Nunca salva os dados pesados (blobs/base64) no LocalStorage
     const { dynamicAds, ...toSave } = state;
     localStorage.setItem('bingo_state', JSON.stringify(toSave));
 }
@@ -95,21 +105,27 @@ function saveState() {
 function setupSync() {
     bc.onmessage = async (event) => {
         if (event.data.type === 'ad_ended') {
-            const isPresenter = !!document.getElementById('bingo-grid-presenter');
-            if (isPresenter) nextAd();
+            if (document.getElementById('bingo-grid-presenter')) nextAd();
             return;
         }
 
-        state = event.data;
-        // Não precisamos await loadDynamicAds aqui se as mídias já vieram no state
-        // Mas o IndexedDB garante consistência local.
+        // Recebe o estado novo
+        const newState = event.data;
+        
+        // Sincroniza o estado básico
+        state = { ...state, ...newState };
+        
+        // Recarrega as mídias do DB local de forma independente
         await loadDynamicAds();
         updateUI();
     };
 }
 
 function broadcast() {
-    bc.postMessage(state);
+    // PERFORMANCE: Removemos os dados pesados antes de enviar pelo canal
+    // O Telão vai ler os dados direto do seu próprio IndexedDB
+    const { dynamicAds, ...toSend } = state;
+    bc.postMessage(toSend);
     saveState();
 }
 
@@ -280,21 +296,14 @@ function createCell(text, className) {
 }
 
 function updateUI() {
-    // Update Colors
     document.documentElement.style.setProperty('--card-active', state.color);
 
-    // Update Color Name Label
     const colorLabel = document.getElementById('current-card-color-label');
     if (colorLabel) {
-        if (state.cardColorName) {
-            colorLabel.textContent = `Cartela: ${state.cardColorName}`;
-            colorLabel.style.display = 'block';
-        } else {
-            colorLabel.style.display = 'none';
-        }
+        colorLabel.textContent = state.cardColorName ? `Cartela: ${state.cardColorName}` : '';
+        colorLabel.style.display = state.cardColorName ? 'block' : 'none';
     }
 
-    // Update Cells
     const allCells = document.querySelectorAll('.number-cell');
     allCells.forEach(cell => {
         const num = parseInt(cell.textContent);
@@ -307,17 +316,12 @@ function updateUI() {
         }
     });
 
-    // Update Last Number
     const lastNumVal = document.getElementById('last-number-value');
     if (lastNumVal) {
-        if (state.lastNumber) {
-            lastNumVal.textContent = `${getLetter(state.lastNumber)} ${state.lastNumber}`;
-        } else {
-            lastNumVal.textContent = '--';
-        }
+        lastNumVal.textContent = state.lastNumber ? `${getLetter(state.lastNumber)} ${state.lastNumber}` : '--';
     }
 
-    // Update Mode & Ads
+    // Ads View
     const adsContainer = document.getElementById('ads-container');
     if (adsContainer) {
         if (state.mode === 'ads') {
@@ -327,30 +331,22 @@ function updateUI() {
                 const ad = state.dynamicAds[state.currentAdIndex];
                 const isPresenter = !!document.getElementById('bingo-grid-presenter');
                 
-                // CRITICAL: Only update innerHTML if the ad content actually changed
                 const currentTag = adContent.querySelector('video, img');
-                const needsReload = !currentTag || 
-                                   state.currentAdIndex !== lastRenderedAdIndex || 
-                                   (ad.type === 'video' && currentTag.tagName !== 'VIDEO') ||
-                                   (ad.type === 'image' && currentTag.tagName !== 'IMG');
+                const needsReload = !currentTag || state.currentAdIndex !== lastRenderedAdIndex;
 
                 if (needsReload) {
                     lastRenderedAdIndex = state.currentAdIndex;
                     if (ad.type === 'video') {
                         const loopAttr = isPresenter ? 'loop' : '';
                         adContent.innerHTML = `<video id="active-video" src="${ad.data}" autoplay ${loopAttr} ${state.adsMuted ? 'muted' : ''} style="max-width:100%; max-height:100%;"></video>`;
-                        
                         if (!isPresenter) {
                             const videoEl = document.getElementById('active-video');
-                            videoEl.onended = () => {
-                                bc.postMessage({ type: 'ad_ended' });
-                            };
+                            videoEl.onended = () => bc.postMessage({ type: 'ad_ended' });
                         }
                     } else {
                         adContent.innerHTML = `<img src="${ad.data}" style="max-width:100%; max-height:100%; object-fit:contain;">`;
                     }
                 } else {
-                    // Update only mute property if it's a video already playing
                     const videoEl = document.getElementById('active-video');
                     if (videoEl) videoEl.muted = state.adsMuted;
                 }
@@ -361,12 +357,12 @@ function updateUI() {
         } else {
             adsContainer.classList.remove('active');
             const adContent = document.getElementById('ad-content');
-            if (adContent) adContent.innerHTML = ''; // Para o vídeo e áudio imediatamente
+            if (adContent) adContent.innerHTML = '';
             lastRenderedAdIndex = -1;
         }
     }
 
-    // Update Ad Manager UI
+    // Ad Manager UI
     const adList = document.getElementById('dynamic-ad-list');
     if (adList) {
         adList.innerHTML = '';
@@ -384,28 +380,23 @@ function updateUI() {
         });
     }
 
-    // Update Mute Button
     const muteBtn = document.getElementById('mute-ads-btn');
     if (muteBtn) {
         muteBtn.textContent = state.adsMuted ? '🔇 Áudio Desligado' : '🔊 Áudio Ligado';
         muteBtn.className = state.adsMuted ? 'btn btn-danger' : 'btn btn-success';
     }
 
-    // Update Win
     const winOverlay = document.getElementById('win-overlay');
     const winText = document.getElementById('win-text');
-    if (winOverlay && winText) {
-        if (state.winType) {
-            winOverlay.classList.add('active');
-            winText.textContent = state.winType === 'quina' ? 'QUINA!' : 'BINGO!';
-            startConfetti(state.winType === 'bingo' ? 200 : 100);
-        } else {
-            winOverlay.classList.remove('active');
-            stopConfetti();
-        }
+    if (winOverlay && winText && state.winType) {
+        winOverlay.classList.add('active');
+        winText.textContent = state.winType === 'quina' ? 'QUINA!' : 'BINGO!';
+        startConfetti(state.winType === 'bingo' ? 200 : 100);
+    } else if (winOverlay) {
+        winOverlay.classList.remove('active');
+        stopConfetti();
     }
 
-    // Update History
     const historyList = document.getElementById('history-list');
     if (historyList) {
         historyList.textContent = state.drawnNumbers.slice().reverse().join(', ') || 'Nenhum número sorteado';
@@ -420,7 +411,6 @@ function getLetter(num) {
     return 'O';
 }
 
-// Ads Control
 async function uploadAd(input) {
     const files = Array.from(input.files);
     for (const file of files) {
@@ -461,7 +451,6 @@ function prevAd() {
     updateUI();
 }
 
-// Keyboard
 window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.key.toLowerCase() === 'q') triggerWin('quina');
@@ -470,7 +459,6 @@ window.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'z' && e.ctrlKey) undoLast();
 });
 
-// Manual Input Helper
 window.registerManual = function() {
     const input = document.getElementById('manual-num');
     if (input) {
@@ -480,7 +468,6 @@ window.registerManual = function() {
     }
 };
 
-// Confetti
 let confettiInterval;
 function startConfetti(count) {
     const canvas = document.getElementById('confetti-canvas');
@@ -525,14 +512,11 @@ function stopConfetti() {
     if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
 }
 
-// Autoplay Ads
 setInterval(() => {
     const isPresenter = !!document.getElementById('bingo-grid-presenter');
     if (isPresenter && state.mode === 'ads' && state.autoplayAds && state.dynamicAds.length > 0) {
         const currentAd = state.dynamicAds[state.currentAdIndex];
-        // Se for vídeo, o telão avisa quando terminar via 'ad_ended'
         if (currentAd && currentAd.type === 'video') return; 
-        
         state.currentAdIndex = (state.currentAdIndex + 1) % state.dynamicAds.length;
         broadcast();
         updateUI();
