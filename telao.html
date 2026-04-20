@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telão - Bingo Premium</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            cursor: none;
+        }
+
+        /* Hide cursor on big screen */
+    </style>
+</head>
+
+<body>
+    <!-- Main Bingo View -->
+    <div class="telao-container">
+        <!-- Rótulo da Cor da Cartela -->
+        <div id="current-card-color-label" class="card-color-label">Cartela: --</div>
+
+        <!-- Último Número Sorteado (Reposicionado para cima) -->
+        <div class="last-number-overlay">
+            <div class="last-number-label">Último Número</div>
+            <div id="last-number-value" class="last-number-value">--</div>
+        </div>
+
+        <!-- O script.js irá gerar a grade horizontal completa dentro desta div -->
+        <div id="telao-grid" class="bingo-grid">
+            <!-- JS gerado automaticamente -->
+        </div>
+    </div>
+
+    <!-- Ads Mode View -->
+    <div id="ads-container" class="ads-container">
+        <div id="ad-content" class="ad-content">
+            <!-- Dynamic img or video injected here -->
+        </div>
+    </div>
+
+    <!-- Win Animation View -->
+    <div id="win-overlay" class="win-overlay">
+        <div id="win-text" class="win-text">BINGO!</div>
+        <p style="font-size: 2rem; color: white; margin-top: 20px;">Temos um ganhador!</p>
+    </div>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <footer class="app-footer">
+        &copy; Desenvolvido por Leandro Matheus Berck - (19) 99761-6323 | Todos os Direitos Reservados
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        // Fullscreen on first click
+        document.body.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error(`Erro ao entrar em tela cheia: ${err.message}`);
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>

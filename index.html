@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Apresentador - Bingo Premium</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <h1 style="font-weight: 800; font-size: 2rem;">BINGO <span style="color: var(--bingo-gold);">CONTROL</span>
+            </h1>
+            <div class="mode-selector" style="display: flex; gap: 10px;">
+                <button class="btn btn-warning"
+                    onclick="window.open('telao.html', 'BingoScreen', 'width=1280,height=720,menubar=no,toolbar=no,location=no,status=no,resizable=yes')"
+                    title="Abrir Telão em nova janela">📺 Abrir Telão</button>
+                <button class="btn btn-primary" onclick="setMode('ads')">Modo Propaganda</button>
+                <button class="btn btn-success" onclick="setMode('bingo')">Modo Bingo</button>
+            </div>
+        </header>
+
+        <div class="presenter-grid">
+            <!-- Sidebar: Controls -->
+            <aside class="control-panel">
+                <div class="control-section">
+                    <h3>📢 Anexar Propagandas</h3>
+                    <input type="file" id="ad-upload" multiple accept="image/*,video/*" style="display: none;"
+                        onchange="uploadAd(this)">
+                    <button class="btn btn-primary" style="width: 100%;"
+                        onclick="document.getElementById('ad-upload').click()">➕ Anexar Mídias</button>
+
+                    <button id="mute-ads-btn" class="btn btn-danger" style="width: 100%; margin-top: 10px;"
+                        onclick="toggleAdsMute()">🔇 Áudio Desligado</button>
+
+                    <div id="dynamic-ad-list"
+                        style="margin: 15px 0; max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 5px;">
+                        <!-- JS List -->
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button class="btn btn-primary" onclick="prevAd()">◀</button>
+                        <button class="btn btn-primary" onclick="nextAd()">▶</button>
+                    </div>
+                    <label style="margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 0.8rem;">
+                        <input type="checkbox" checked onchange="state.autoplayAds = this.checked"> Auto-play (10s)
+                    </label>
+                </div>
+
+                <div class="control-section">
+                    <h3>🔢 Registrar Manual</h3>
+                    <div class="input-group" style="margin-top: 10px;">
+                        <input type="number" id="manual-num" min="1" max="75" placeholder="00"
+                            onkeydown="if(event.key === 'Enter') registerManual()">
+                        <button class="btn btn-primary" onclick="registerManual()">OK</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>🎉 Ações do Jogo</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                        <button class="btn btn-warning" onclick="triggerWin('quina')">Quina (Q)</button>
+                        <button class="btn btn-success" onclick="triggerWin('bingo')">Bingo (B)</button>
+                        <button class="btn btn-danger" onclick="resetGame()" style="grid-column: span 2;">Resetar Tudo
+                            (R)</button>
+                        <button class="btn btn-primary" onclick="undoLast()" style="grid-column: span 2;">Desfazer
+                            Último (Ctrl+Z)</button>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>🎨 Cor da Cartela</h3>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <input type="color" value="#3b82f6" onchange="setCardColor(this.value)"
+                            style="width: 50px; height: 40px; border-radius: 8px; border: none; cursor: pointer;">
+                        <input type="text" placeholder="Ex: Amarela, Azul..." oninput="setCardColorName(this.value)"
+                            style="flex: 1; background: var(--bg-color); border: 1px solid #333; color: white; padding: 5px 10px; border-radius: 8px;">
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>🕒 Histórico</h3>
+                    <div id="history-list"
+                        style="font-size: 0.9rem; color: var(--text-secondary); max-height: 100px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                        Nenhum número sorteado
+                    </div>
+                </div>
+
+                <div class="control-section"
+                    style="background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-primary);">
+                    <h3>💡 Instruções de Uso</h3>
+                    <ul
+                        style="font-size: 0.8rem; margin-top: 5px; padding-left: 15px; display: flex; flex-direction: column; gap: 5px;">
+                        <li>Abra o <b>telao.html</b> em outra aba.</li>
+                        <li>Arraste o telão para a segunda tela.</li>
+                        <li>Clique no telão para entrar em <b>Tela Cheia</b>.</li>
+                        <li>Use <b>Q</b> para Quina e <b>B</b> para Bingo.</li>
+                        <li>Use <b>Z + Ctrl</b> para desfazer erro.</li>
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- Main Content: Bingo Grid -->
+            <main class="main-board">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Grade Interativa</h2>
+                    <div style="text-align: right;">
+                        <span style="color: var(--text-secondary);">Último Sorteado:</span>
+                        <div id="last-number-value"
+                            style="font-size: 2.5rem; font-weight: 800; color: var(--accent-primary);">--</div>
+                    </div>
+                </div>
+
+                <div id="bingo-grid-presenter" class="bingo-grid">
+                    <!-- JS generated -->
+                </div>
+
+                <div style="margin-top: 20px; color: var(--text-secondary); font-size: 0.8rem;">
+                    * Clique em um número para marcar/desmarcar. Ele será automaticamente o "Último Sorteado".
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-box">
+            <p id="modal-message" class="modal-message">Mensagem aqui...</p>
+            <div id="modal-buttons" class="modal-buttons">
+                <!-- Botões dinâmicos via JS -->
+            </div>
+        </div>
+    </div>
+
+    <footer class="app-footer">
+        &copy; Desenvolvido por Leandro Matheus Berck - (19) 99761-6323 | Todos os Direitos Reservados
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
