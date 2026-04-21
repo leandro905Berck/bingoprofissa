@@ -46,12 +46,12 @@ let state = {
 };
 
 let lastRenderedAdIndex = -1;
+let currentObjectURL = null;
 
 // Sound Effects
 const sounds = {
     draw: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
-    win: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'),
-    reset: new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3')
+    win: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3')
 };
 
 // Initialize
@@ -121,8 +121,11 @@ function setupSync() {
                 if (document.getElementById('bingo-grid-presenter')) nextAd();
                 return;
             }
+            const reloadAds = event.data.reloadAds;
+            delete event.data.reloadAds;
+
             state = { ...state, ...event.data };
-            await loadDynamicAds();
+            if (reloadAds) await loadDynamicAds();
             updateUI();
         } catch (e) {
             console.error("Erro na recepção do Sync:", e);
@@ -130,11 +133,10 @@ function setupSync() {
     };
 }
 
-function broadcast() {
+function broadcast(reloadAds = false) {
     try {
         const { dynamicAds, ...toSend } = state;
-        // Envia apenas o básico para não travar o canal
-        bc.postMessage(JSON.parse(JSON.stringify(toSend)));
+        bc.postMessage({ ...JSON.parse(JSON.stringify(toSend)), reloadAds });
         saveState();
     } catch (e) {
         console.error("Erro no Broadcast:", e);
@@ -178,7 +180,7 @@ function resetGame() {
         state.lastNumber = null;
         state.winType = null;
         state.history = [];
-        sounds.reset.play().catch(() => { });
+
         broadcast();
         updateUI();
     });
@@ -317,14 +319,26 @@ function updateUI() {
                         lastRenderedAdIndex = state.currentAdIndex;
                         const ad = state.dynamicAds[state.currentAdIndex];
                         const isPresenter = !!document.getElementById('bingo-grid-presenter');
+                        
+                        if (currentObjectURL) {
+                            URL.revokeObjectURL(currentObjectURL);
+                            currentObjectURL = null;
+                        }
+
+                        let src = ad.data;
+                        if (ad.data instanceof Blob) {
+                            currentObjectURL = URL.createObjectURL(ad.data);
+                            src = currentObjectURL;
+                        }
+
                         if (ad.type === 'video') {
                             const l = isPresenter ? 'loop' : '';
-                            adContent.innerHTML = `<video id="active-video" src="${ad.data}" autoplay ${l} ${state.adsMuted ? 'muted' : ''} style="max-width:100%; max-height:100%;"></video>`;
+                            adContent.innerHTML = `<video id="active-video" src="${src}" autoplay ${l} ${state.adsMuted ? 'muted' : ''} style="max-width:100%; max-height:100%;"></video>`;
                             if (!isPresenter) {
                                 document.getElementById('active-video').onended = () => bc.postMessage({ type: 'ad_ended' });
                             }
                         } else {
-                            adContent.innerHTML = `<img src="${ad.data}" style="max-width:100%; max-height:100%; object-fit:contain;">`;
+                            adContent.innerHTML = `<img src="${src}" style="max-width:100%; max-height:100%; object-fit:contain;">`;
                         }
                     } else {
                         const v = document.getElementById('active-video');
@@ -350,7 +364,20 @@ function updateUI() {
                 const item = document.createElement('div');
                 item.className = 'ad-item';
                 item.style = 'display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 8px; margin-bottom: 5px;';
-                const thumb = ad.type === 'video' ? '📽️' : `<img src="${ad.data}" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px;">`;
+                
+                let thumbSrc = '';
+                if (ad.type === 'image') {
+                    if (ad.data instanceof Blob) {
+                        thumbSrc = URL.createObjectURL(ad.data);
+                        // Revoke after load to save memory, or keep if list is small. 
+                        // For simplicity and speed in UI, we'll use a data URL for thumbs or just let them be.
+                    } else {
+                        thumbSrc = ad.data;
+                    }
+                }
+
+                const thumb = ad.type === 'video' ? '📽️' : `<img src="${thumbSrc}" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px;" onload="if(this.src.startsWith('blob:')) URL.revokeObjectURL(this.src)">`;
+                
                 item.innerHTML = `
                     <div style="width:40px; text-align:center;">${thumb}</div>
                     <span style="flex: 1; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${ad.name}</span>
@@ -425,20 +452,21 @@ function getLetter(num) {
 
 async function uploadAd(input) {
     const files = Array.from(input.files);
+    if (!db) return alert("Erro no Banco de Dados. Recarregue.");
+    
     for (const file of files) {
         const type = file.type.startsWith('video/') ? 'video' : 'image';
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            if (!db) return alert("Erro no Banco de Dados. Recarregue.");
-            const transaction = db.transaction(STORE_NAME, 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            store.add({ data: e.target.result, name: file.name, type: type });
-            await loadDynamicAds();
-            broadcast();
-            updateUI();
-        };
-        reader.readAsDataURL(file);
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        store.add({ data: file, name: file.name, type: type });
     }
+    
+    // Pequeno delay para garantir que o IndexedDB processou
+    setTimeout(async () => {
+        await loadDynamicAds();
+        broadcast(true);
+        updateUI();
+    }, 500);
 }
 
 async function removeAd(id) {
@@ -446,7 +474,7 @@ async function removeAd(id) {
     const store = transaction.objectStore(STORE_NAME);
     store.delete(id);
     await loadDynamicAds();
-    broadcast();
+    broadcast(true);
     updateUI();
 }
 
