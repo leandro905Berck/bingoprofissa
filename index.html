@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel do Apresentador - Bingo Premium</title>
+    <title>Painel do Apresentador</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -61,7 +61,7 @@
                 <div class="control-section">
                     <h3>🎉 Ações do Jogo</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                        <button class="btn btn-warning" onclick="triggerWin('quina')">Quina (Q)</button>
+                        <button class="btn btn-warning" onclick="triggerWin('quina')">Cinquina (Q)</button>
                         <button class="btn btn-success" onclick="triggerWin('bingo')">Bingo (B)</button>
                         <button class="btn btn-danger" onclick="resetGame()" style="grid-column: span 2;">Resetar Tudo
                             (R)</button>
@@ -96,7 +96,7 @@
                         <li>Abra o <b>telao.html</b> em outra aba.</li>
                         <li>Arraste o telão para a segunda tela.</li>
                         <li>Clique no telão para entrar em <b>Tela Cheia</b>.</li>
-                        <li>Use <b>Q</b> para Quina e <b>B</b> para Bingo.</li>
+                        <li>Use <b>Q</b> para Cinquina e <b>B</b> para Bingo.</li>
                         <li>Use <b>Z + Ctrl</b> para desfazer erro.</li>
                     </ul>
                 </div>
@@ -142,11 +142,18 @@
             </div>
         </div>
     </div>
-
+    
+    <!-- Win Animation View (Presenter also sees it now) -->
+    <div id="win-overlay" class="win-overlay">
+        <div id="win-text" class="win-text" style="font-size: 5rem;">BINGO!</div>
+        <button class="btn btn-danger" onclick="state.winType = null; broadcast(); updateUI();" style="margin-top: 20px;">Fechar (X)</button>
+    </div>
+    
     <footer class="app-footer">
         &copy; Desenvolvido por Leandro Matheus Berck - (19) 99761-6323 | Todos os Direitos Reservados
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="script.js"></script>
 </body>
 

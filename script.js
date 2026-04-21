@@ -370,7 +370,7 @@ function updateUI() {
         if (winOverlay) {
             if (state.winType) {
                 winOverlay.classList.add('active');
-                document.getElementById('win-text').textContent = state.winType === 'quina' ? 'QUINA!' : 'BINGO!';
+                document.getElementById('win-text').textContent = state.winType === 'quina' ? 'CINQUINA!' : 'BINGO!';
                 startConfetti(state.winType === 'bingo' ? 200 : 100);
             } else {
                 winOverlay.classList.remove('active');
@@ -384,6 +384,34 @@ function updateUI() {
         }
     } catch (e) {
         console.error("Erro no updateUI:", e);
+    }
+}
+
+let confettiInterval;
+function startConfetti(particleCount = 100) {
+    if (confettiInterval) return;
+    const canvas = document.getElementById('confetti-canvas');
+    if (!canvas) return; // Não dispara confete se não houver canvas (ex: tela do apresentador)
+    
+    const fire = confetti.create(canvas, { resize: true, useWorker: true });
+
+    function frame() {
+        fire({
+            particleCount: particleCount / 2,
+            spread: 70,
+            origin: { y: 0.6 },
+            zIndex: 1001
+        });
+    }
+
+    frame();
+    confettiInterval = setInterval(frame, 2000);
+}
+
+function stopConfetti() {
+    if (confettiInterval) {
+        clearInterval(confettiInterval);
+        confettiInterval = null;
     }
 }
 
@@ -466,3 +494,17 @@ setInterval(() => {
 }, 10000);
 
 init();
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    
+    const key = e.key.toLowerCase();
+    if (key === 'q') triggerWin('quina');
+    if (key === 'b') triggerWin('bingo');
+    if (key === 'r') resetGame();
+    if (e.ctrlKey && key === 'z') {
+        e.preventDefault();
+        undoLast();
+    }
+});
